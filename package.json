@@ -19,7 +19,7 @@
     "@capacitor/android": "8.5.1",
     "@capacitor/core": "8.5.1",
     "@capacitor/ios": "8.5.1",
-    "@capgo/background-geolocation": "8.5.0",
+    "@capgo/background-geolocation": "8.4.3",
     "@capacitor/app-launcher": "8.0.1"
   },
   "devDependencies": {
