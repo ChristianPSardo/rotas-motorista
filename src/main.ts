@@ -1,5 +1,5 @@
 import './style.css';
-import { clearConnection, fetchDashboard, getApiUrl, getDriverToken, healthCheck, saveConnection, startRoute, checkStop } from './api';
+import { clearConnection, fetchDashboard, getDriverToken, healthCheck, saveConnection, startRoute, checkStop } from './api';
 import { getTrackedRouteId, openLocationSettings, startBackgroundTracking, stopBackgroundTracking } from './tracking';
 import type { DriverDashboard, Route, Stop } from './types';
 
@@ -33,9 +33,8 @@ function toast(message: string, error=false) {
 function renderSettings() {
   shell(`
     <section class="card">
-      <h2>Conectar</h2>
-      <p>Informe a URL /exec do Apps Script e o token do motorista.</p>
-      <label>URL do Apps Script<input id="url" value="${esc(getApiUrl())}" placeholder="https://script.google.com/macros/s/.../exec"></label>
+      <h2>Conectar motorista</h2>
+      <p>O servidor Supabase já está configurado. Informe apenas o token do motorista.</p>
       <label>Token do motorista<input id="token" value="${esc(getDriverToken())}" placeholder="Token do motorista"></label>
       <button id="connect" class="primary full">Conectar</button>
       <button id="clear" class="secondary full">Limpar</button>
@@ -43,19 +42,13 @@ function renderSettings() {
   `);
 
   document.querySelector('#connect')?.addEventListener('click', async () => {
-    let url = (document.querySelector<HTMLInputElement>('#url')?.value || '').trim();
-    let token = (document.querySelector<HTMLInputElement>('#token')?.value || '').trim();
-    for (const candidate of [url, token]) {
-      if (!candidate.startsWith('http')) continue;
-      try {
-        const parsed = new URL(candidate);
-        const t = parsed.searchParams.get('token');
-        if (t) { token = t; url = `${parsed.origin}${parsed.pathname}`; break; }
-      } catch {}
-    }
-    if (!url || !token) return toast('Informe URL e token.', true);
+    const token = (document.querySelector<HTMLInputElement>('#token')?.value || '').trim();
+    if (!token) return toast('Informe o token.', true);
     try {
-      await healthCheck(url); saveConnection(url, token); dashboard = await fetchDashboard(); renderDashboard();
+      await healthCheck();
+      saveConnection(token);
+      dashboard = await fetchDashboard();
+      renderDashboard();
     } catch (e) { toast(e instanceof Error ? e.message : 'Erro ao conectar.', true); }
   });
 
@@ -92,7 +85,7 @@ function renderRoute(route: Route): string {
   return `<section class="card route">
     <div class="row"><div><span class="badge">${esc(route.STATUS)}</span><h2>${esc(route.NOME)}</h2><p>${esc(route.ORIGEM?.NOME)} → ${esc(route.DESTINO?.NOME)}</p></div><strong>${esc(route.DISTANCIA_KM || '')}${route.DISTANCIA_KM ? ' km':''}</strong></div>
     <div class="stats"><div><b>${done}/${route.PARADAS.length}</b><small>paradas</small></div><div><b>${mins(route.TEMPO_RESTANTE_MIN)}</b><small>restante</small></div><div><b>${fmt(route.ETA_FIM)}</b><small>chegada</small></div></div>
-    <div class="trackbox"><div><b>${tracking ? '📍 Rastreamento ativo' : '📍 Rastreamento desligado'}</b><small>${tracking ? 'Pode usar outro app ou bloquear a tela.' : 'Toque para iniciar a rota e o GPS.'}</small></div>${tracking ? `<button class="secondary stopgps">Parar GPS</button>` : `<button class="primary start" data-id="${esc(route.ID)}">Iniciar rota</button>`}</div>
+    <div class="trackbox"><div><b>${tracking ? '📍 Rastreamento ativo' : '📍 Rastreamento desligado'}</b><small>${tracking ? 'Pode usar outro app ou bloquear a tela.' : 'Toque para iniciar a rota e o GPS.'}</small></div>${tracking ? '<button class="secondary stopgps">Parar GPS</button>' : `<button class="primary start" data-id="${esc(route.ID)}">Iniciar rota</button>`}</div>
     ${next ? `<div class="next"><small>PRÓXIMA PARADA</small><h3>${esc(next.ENDERECO_NOME)}</h3><p>${esc(next.ENDERECO)}</p><p><b>ETA:</b> ${fmt(next.ETA_PREVISTA)}</p><div class="actions"><button class="secondary nav" data-url="${esc(next.MAPS_URL || '')}">Navegar</button><button class="primary check" data-id="${esc(next.ID)}" data-name="${esc(next.ENDERECO_NOME)}">✓ Cheguei</button></div></div>` : ''}
   </section>`;
 }
@@ -127,7 +120,7 @@ async function arrive(stopId: string, name: string) {
 }
 
 async function boot() {
-  if (!getApiUrl() || !getDriverToken()) return renderSettings();
+  if (!getDriverToken()) return renderSettings();
   try { dashboard = await fetchDashboard(); renderDashboard(); }
   catch { renderSettings(); }
 }
