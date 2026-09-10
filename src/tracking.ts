@@ -26,7 +26,6 @@ export async function startBackgroundTracking(routeId: string): Promise<void> {
       stale: true,
       distanceFilter: 0,
       minIntervalMs: 10000,
-      networkFallback: true,
       url: locationUrl(routeId)
     },
     (location, error) => {
