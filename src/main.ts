@@ -1,11 +1,12 @@
 import './style.css';
 import { clearConnection, fetchDashboard, getDriverToken, healthCheck, saveConnection, startRoute, checkStop } from './api';
-import { getTrackedRouteId, openLocationSettings, startBackgroundTracking, stopBackgroundTracking } from './tracking';
+import { getTrackedRouteId, getLastLocationSentAt, getLastLocationError, openLocationSettings, startBackgroundTracking, stopBackgroundTracking } from './tracking';
 import type { DriverDashboard, Route, Stop } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let dashboard: DriverDashboard | null = null;
 let autoRefreshBusy = false;
+let autoResumeAttemptedRoute = '';
 
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]!));
 const fmt = (v?: string) => v ? new Date(v).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
@@ -68,7 +69,7 @@ function renderDashboard() {
   const routes = dashboard.rotas || [];
   shell(`
     <section class="hello"><div><small>Motorista</small><h2>Olá, ${esc(dashboard.motorista?.NOME || '')}</h2></div><button id="refresh" class="secondary">Atualizar</button></section>
-    <section class="gps"><span>${getTrackedRouteId() ? '🟢 GPS em segundo plano ativo' : '⚪ GPS parado'}</span><button id="permissions">Permissões</button></section>
+    <section class="gps"><div><span>${getTrackedRouteId() ? '🟢 GPS em segundo plano ativo' : '⚪ GPS parado'}</span><small>${getLastLocationSentAt() ? 'Último envio: ' + esc(new Date(getLastLocationSentAt()).toLocaleTimeString('pt-BR')) : (getLastLocationError() ? 'Erro: ' + esc(getLastLocationError()) : 'Aguardando primeira posição')}</small></div><button id="permissions">Permissões</button></section>
     ${routes.length ? routes.map(renderRoute).join('') : '<section class="card"><h2>Nenhuma rota ativa</h2></section>'}
   `);
 
@@ -91,12 +92,32 @@ function renderRoute(route: Route): string {
   </section>`;
 }
 
+async function ensureTrackingForActiveRoute(showErrors = false) {
+  if (!dashboard?.valid) return;
+  const active = (dashboard.rotas || []).find(r => String(r.STATUS).toUpperCase() === 'EM_ROTA');
+  if (!active) return;
+
+  const tracked = getTrackedRouteId();
+  if (tracked === active.ID) return;
+  if (autoResumeAttemptedRoute === active.ID) return;
+
+  autoResumeAttemptedRoute = active.ID;
+  try {
+    await startBackgroundTracking(active.ID);
+    toast('GPS reativado automaticamente para a rota em andamento.');
+    renderDashboard();
+  } catch (e) {
+    if (showErrors) toast(e instanceof Error ? e.message : 'Não foi possível reativar o GPS.', true);
+  }
+}
+
 async function refresh(showErrors = true) {
   if (autoRefreshBusy) return;
   autoRefreshBusy = true;
   try {
     dashboard = await fetchDashboard();
     renderDashboard();
+    await ensureTrackingForActiveRoute(false);
   } catch (e) {
     if (showErrors) toast(e instanceof Error ? e.message : 'Erro ao atualizar.', true);
   } finally {
@@ -130,8 +151,13 @@ async function arrive(stopId: string, name: string) {
 
 async function boot() {
   if (!getDriverToken()) return renderSettings();
-  try { dashboard = await fetchDashboard(); renderDashboard(); }
-  catch { renderSettings(); }
+  try {
+    dashboard = await fetchDashboard();
+    renderDashboard();
+    await ensureTrackingForActiveRoute(true);
+  } catch {
+    renderSettings();
+  }
 }
 
 void boot();
@@ -139,3 +165,8 @@ void boot();
 setInterval(() => {
   if (getDriverToken()) void refresh(false);
 }, 8000);
+
+
+window.addEventListener('gps-status-changed', () => {
+  if (dashboard?.valid) renderDashboard();
+});
