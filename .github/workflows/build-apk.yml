@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,3 +54,14 @@ jobs:
           name: RotasMotorista-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Publish stable APK download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk RotasMotorista.apk
+          if gh release view mobile-latest >/dev/null 2>&1; then
+            gh release upload mobile-latest RotasMotorista.apk --clobber
+          else
+            gh release create mobile-latest RotasMotorista.apk --title "Rotas Motorista - APK atual" --notes "APK Android mais recente do aplicativo Rotas Motorista."
+          fi
