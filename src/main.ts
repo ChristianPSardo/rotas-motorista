@@ -5,6 +5,7 @@ import type { DriverDashboard, Route, Stop } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let dashboard: DriverDashboard | null = null;
+let autoRefreshBusy = false;
 
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]!));
 const fmt = (v?: string) => v ? new Date(v).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
@@ -90,9 +91,17 @@ function renderRoute(route: Route): string {
   </section>`;
 }
 
-async function refresh() {
-  try { dashboard = await fetchDashboard(); renderDashboard(); }
-  catch (e) { toast(e instanceof Error ? e.message : 'Erro ao atualizar.', true); }
+async function refresh(showErrors = true) {
+  if (autoRefreshBusy) return;
+  autoRefreshBusy = true;
+  try {
+    dashboard = await fetchDashboard();
+    renderDashboard();
+  } catch (e) {
+    if (showErrors) toast(e instanceof Error ? e.message : 'Erro ao atualizar.', true);
+  } finally {
+    autoRefreshBusy = false;
+  }
 }
 
 async function start(routeId: string) {
@@ -126,3 +135,7 @@ async function boot() {
 }
 
 void boot();
+
+setInterval(() => {
+  if (getDriverToken()) void refresh(false);
+}, 8000);
