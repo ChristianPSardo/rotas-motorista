@@ -1,22 +1,34 @@
 /**
  * Sincronização Google Sheets <-> Supabase para o sistema Rotas Motorista.
  *
- * 1) Cole este arquivo no mesmo projeto Apps Script do painel.
- * 2) Execute uma vez:
- *    configurarSupabaseSync('SEU_SEGREDO')
- * 3) Execute:
- *    sincronizarSupabase()
- * 4) Opcional:
- *    ativarSincronizacaoAutomatica()
+ * Configure o segredo uma vez em Script Properties usando configurarSupabaseSync().
+ * O GPS ao vivo do desktop usa getLiveTrackingData() e NÃO depende do gatilho de 1 minuto.
  */
 
 const SB_SYNC_PUSH_URL = 'https://myrmbhrvhqrqtnkkazzr.supabase.co/functions/v1/admin-sync';
 const SB_SYNC_PULL_URL = 'https://myrmbhrvhqrqtnkkazzr.supabase.co/functions/v1/admin-pull';
+const SB_LIVE_URL = 'https://myrmbhrvhqrqtnkkazzr.supabase.co/functions/v1/admin-live';
 
 function configurarSupabaseSync(segredo) {
   if (!segredo) throw new Error('Informe o segredo de sincronização.');
   PropertiesService.getScriptProperties().setProperty('SUPABASE_SYNC_SECRET', String(segredo).trim());
   return 'Supabase configurado.';
+}
+
+function sbSs_() {
+  if (typeof ss_ === 'function') return ss_();
+
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('SPREADSHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) {
+    props.setProperty('SPREADSHEET_ID', ss.getId());
+    return ss;
+  }
+
+  throw new Error('Planilha não encontrada. Configure SPREADSHEET_ID nas propriedades do script.');
 }
 
 function sincronizarSupabase() {
@@ -44,14 +56,21 @@ function sincronizarSupabase() {
       ok: true,
       enviados: push.synced || {},
       recebidos: {
-        rotas: (pull.data && pull.data.routes || []).length,
-        paradas: (pull.data && pull.data.stops || []).length,
-        localizacoes: (pull.data && pull.data.locations || []).length
+        rotas: ((pull.data && pull.data.routes) || []).length,
+        paradas: ((pull.data && pull.data.stops) || []).length,
+        localizacoes: ((pull.data && pull.data.locations) || []).length
       }
     };
   } finally {
     lock.releaseLock();
   }
+}
+
+function getLiveTrackingData(routeExternalId) {
+  const body = {};
+  if (routeExternalId) body.routeExternalId = String(routeExternalId);
+  const result = sbPost_(SB_LIVE_URL, body);
+  return result.data || { rotas: [] };
 }
 
 function ativarSincronizacaoAutomatica() {
@@ -99,15 +118,6 @@ function sbPost_(url, body) {
     throw new Error((json && json.error) || ('Erro HTTP ' + code));
   }
   return json;
-}
-
-function sbSs_() {
-  if (typeof ss_ === 'function') return ss_();
-  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-  if (id) return SpreadsheetApp.openById(id);
-  const ss = sbSs_();
-  if (!ss) throw new Error('Planilha não encontrada. Configure SPREADSHEET_ID nas propriedades do script.');
-  return ss;
 }
 
 function sbLerAba_(nome) {
@@ -171,7 +181,7 @@ function sbAtualizarPorId_(sh, rows, campos) {
 }
 
 function sbAplicarLocalizacoes_(rows) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = sbSs_();
   let sh = ss.getSheetByName('LOCALIZACOES');
 
   const headers = [
@@ -220,4 +230,14 @@ function sbAplicarLocalizacoes_(rows) {
       map[key] = sh.getLastRow();
     }
   });
+}
+
+function testarSupabaseLive() {
+  const data = getLiveTrackingData();
+  Logger.log(JSON.stringify({
+    rotas: (data.rotas || []).length,
+    primeiraRota: data.rotas && data.rotas[0] ? data.rotas[0].NOME : null,
+    gps: data.rotas && data.rotas[0] ? data.rotas[0].LOCALIZACAO : null
+  }));
+  return data;
 }
