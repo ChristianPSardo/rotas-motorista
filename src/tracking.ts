@@ -1,5 +1,5 @@
 import { BackgroundGeolocation } from '@capgo/background-geolocation';
-import { locationUrl, sendLocation } from './api';
+import { locationUrl } from './api';
 
 const ACTIVE_ROUTE_KEY = 'rotas.activeTrackingRoute';
 
@@ -24,17 +24,13 @@ export async function startBackgroundTracking(routeId: string): Promise<void> {
       backgroundMessage: 'Sua localização está sendo compartilhada durante a rota.',
       requestPermissions: false,
       stale: true,
-      distanceFilter: 0,
-      minIntervalMs: 10000,
+      distanceFilter: 5,
+      minIntervalMs: 7000,
       url: locationUrl(routeId)
     },
-    (location, error) => {
+    (_location, error) => {
       if (error) {
         console.warn('Erro de localização:', error.code, error.message);
-        return;
-      }
-      if (location) {
-        void sendLocation(routeId, location).catch(err => console.warn('Falha ao enviar localização:', err));
       }
     }
   );
