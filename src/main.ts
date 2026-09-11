@@ -72,7 +72,7 @@ function renderDashboard() {
     ${routes.length ? routes.map(renderRoute).join('') : '<section class="card"><h2>Nenhuma rota ativa</h2></section>'}
   `);
 
-  document.querySelector('#refresh')?.addEventListener('click', refresh);
+  document.querySelector('#refresh')?.addEventListener('click', () => void refresh(true));
   document.querySelector('#permissions')?.addEventListener('click', () => openLocationSettings());
   document.querySelectorAll<HTMLButtonElement>('.start').forEach(b => b.addEventListener('click', () => start(b.dataset.id || '')));
   document.querySelectorAll<HTMLButtonElement>('.stopgps').forEach(b => b.addEventListener('click', stopGps));
