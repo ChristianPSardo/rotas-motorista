@@ -101,8 +101,17 @@ function sbPost_(url, body) {
   return json;
 }
 
+function sbSs_() {
+  if (typeof ss_ === 'function') return ss_();
+  const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  const ss = sbSs_();
+  if (!ss) throw new Error('Planilha não encontrada. Configure SPREADSHEET_ID nas propriedades do script.');
+  return ss;
+}
+
 function sbLerAba_(nome) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nome);
+  const sh = sbSs_().getSheetByName(nome);
   if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 1) return [];
 
   const values = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
@@ -118,13 +127,13 @@ function sbLerAba_(nome) {
 }
 
 function sbAplicarRotas_(rows) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ROTAS');
+  const sh = sbSs_().getSheetByName('ROTAS');
   if (!sh || !rows.length) return;
   sbAtualizarPorId_(sh, rows, ['STATUS', 'PARTIDA_PREVISTA', 'TEMPO_RESTANTE_MIN', 'ETA_FIM', 'ATUALIZADO_EM']);
 }
 
 function sbAplicarParadas_(rows) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ROTA_PARADAS');
+  const sh = sbSs_().getSheetByName('ROTA_PARADAS');
   if (!sh || !rows.length) return;
   sbAtualizarPorId_(sh, rows, ['STATUS', 'CHEGADA_REAL', 'CHECK_EM', 'ETA_PREVISTA']);
 }
